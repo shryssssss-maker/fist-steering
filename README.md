@@ -135,15 +135,17 @@ sequenceDiagram
 ```mermaid
 stateDiagram-v2
     direction LR
-    [*] --> Fist : startup
-    Fist --> Palm : open left palm
-    Palm --> Fist : open left palm again
+    [*] --> FIST : startup
+    FIST --> PALM : open left palm
+    PALM --> FIST : open left palm again
 
-    state Fist {
-        note right of Fist: Left fist closed, W released
+    state FIST {
+        [*] --> IDLE
+        IDLE : Left fist closed, W released
     }
-    state Palm {
-        note right of Palm: Left palm open, W held
+    state PALM {
+        [*] --> ACTIVE
+        ACTIVE : Left palm open, W held
     }
 ```
 
@@ -197,8 +199,8 @@ All constants live at the **very top of `fist_steering.py`** — edit once, nowh
 ### Step 1 — Clone the repo
 
 ```powershell
-git clone https://github.com/YOUR_USERNAME/gamecv.git
-cd gamecv
+git clone https://github.com/shryssssss-maker/fist-steering.git
+cd fist-steering
 ```
 
 ---
