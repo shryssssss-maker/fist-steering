@@ -20,7 +20,7 @@ Steer by tilting your fists. Brake by raising your eyebrows. Zero latency. Zero 
 No Python setup. No environment configuration. One command.
 
 ```bash
-npx fist-steering
+npx fist-steering@latest
 ```
 
 On first run the CLI automatically:
