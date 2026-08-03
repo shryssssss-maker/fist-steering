@@ -40,15 +40,42 @@ Usage:
 
 Commands:
   start          Launch the controller (default)
-  setup          Run the configuration wizard
+  setup          Run the full configuration wizard
   config         Alias for setup
+  config show    Print current settings
+  config set <key> <value>
+                 Change one setting without re-running the wizard
   reset          Delete config and re-run setup
   doctor         Run system health checks
   benchmark      Run performance test (Ctrl+C to stop)
                  Options: --time <seconds>
   update         Repair/update Python environment
   report         Generate diagnostic report (fist-steering-report.md)
+  version        Print version number
   help           Show this help message
+
+Flags:
+  -v, --version  Print version number
+  -h, --help     Show this help message
+
+Config keys (for config set):
+  camera           Camera index (default: 0)
+  smooth           Steering smoothing 0.0–1.0 (default: 0.20)
+  deadzone         Deadzone 0.0–0.5 (default: 0.05)
+  tilt             Max tilt angle in degrees (default: 45)
+  eyebrowThreshold Eyebrow raise sensitivity (default: 0.18)
+  throttleValue    Throttle hold strength (default: 0.40)
+  palmFingers      Fingers needed for palm-open (default: 3)
+  disableBrake     true/false (default: false)
+  disableThrottle  true/false (default: false)
+  disablePalm      true/false (default: false)
+
+Examples:
+  npx fist-steering
+  npx fist-steering config show
+  npx fist-steering config set camera 1
+  npx fist-steering config set smooth 0.30
+  npx fist-steering benchmark --time 30
 `);
     return;
   }
@@ -58,9 +85,44 @@ Commands:
 
   switch (command) {
     case 'setup':
-    case 'config':
       await setupLib.runSetup();
       break;
+
+    case 'config': {
+      const sub = argv._[1]; // show | set | (none = wizard)
+      if (sub === 'show') {
+        const conf = configLib.getConfig();
+        const src = configLib.loadConfig() ? configLib.CONFIG_PATH : 'defaults';
+        console.log(`\n\x1b[1m\x1b[36mCurrent Configuration\x1b[0m  (${src})\n`);
+        const pad = 20;
+        for (const [k, v] of Object.entries(conf)) {
+          const def = configLib.DEFAULT_CONFIG[k];
+          const isDefault = v === def;
+          const tag = isDefault ? '\x1b[90m(default)\x1b[0m' : '\x1b[32m(custom)\x1b[0m';
+          console.log(`  ${k.padEnd(pad)} ${String(v).padEnd(10)} ${tag}`);
+        }
+        console.log();
+      } else if (sub === 'set') {
+        const key = argv._[2];
+        const val = argv._[3];
+        if (!key || val === undefined) {
+          console.error('Usage: npx fist-steering config set <key> <value>');
+          console.error('Run `npx fist-steering help` to see all valid keys.');
+          process.exit(1);
+        }
+        const result = configLib.setConfigKey(key, String(val));
+        if (result.ok) {
+          console.log(`\x1b[32m✓\x1b[0m Saved: ${result.message}`);
+        } else {
+          console.error(`\x1b[31m✗\x1b[0m ${result.message}`);
+          process.exit(1);
+        }
+      } else {
+        // no sub-command — run the full wizard
+        await setupLib.runSetup();
+      }
+      break;
+    }
     
     case 'reset':
       configLib.deleteConfig();

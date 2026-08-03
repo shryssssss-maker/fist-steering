@@ -142,8 +142,16 @@ flowchart TB
 # Launch the controller (runs setup on first use)
 npx fist-steering
 
-# Re-run the configuration wizard
+# Re-run the full configuration wizard
 npx fist-steering setup
+
+# Print your current settings at a glance
+npx fist-steering config show
+
+# Change one setting without re-running the wizard
+npx fist-steering config set smooth 0.30
+npx fist-steering config set camera 1
+npx fist-steering config set disableBrake true
 
 # Delete config and start wizard from scratch
 npx fist-steering reset
@@ -163,6 +171,9 @@ npx fist-steering update
 # Generate a diagnostic report (for GitHub issues)
 npx fist-steering report
 
+# Print version
+npx fist-steering --version
+
 # Install globally (run without npx)
 npm install -g fist-steering
 fist-steering
@@ -172,7 +183,26 @@ fist-steering
 
 ## ⚙️ Configuration
 
-Your settings are saved at `~/.fist-steering/config.json` and can be changed by re-running `npx fist-steering setup`.
+Your settings are saved at `~/.fist-steering/config.json`.
+
+**View your current settings:**
+```bash
+npx fist-steering config show
+```
+
+**Change a single setting without running the wizard:**
+```bash
+npx fist-steering config set <key> <value>
+# Examples:
+npx fist-steering config set smooth 0.30
+npx fist-steering config set camera 1
+npx fist-steering config set disableBrake true
+```
+
+**Re-run the full interactive wizard:**
+```bash
+npx fist-steering setup
+```
 
 | Setting | Default | Description |
 |:---|:---:|:---|
@@ -228,7 +258,7 @@ flowchart LR
     DR --> VENV["✓ Virtual Environment\nHealthy / Corrupted"]
     DR --> DEPS["✓ cv2 · mediapipe\nvgamepad · pynput"]
     DR --> CAM["✓ Camera\nDetected / Not found"]
-    DR --> ADMIN["✓ Administrator\nStatus for ViGEmBus"]
+    DR --> ADMIN["⚠ Administrator\n(advisory only — app works\nwithout it in most cases)"]
     DR --> CONF["✓ Configuration\nValid JSON / Defaults"]
 ```
 
@@ -282,10 +312,10 @@ flowchart LR
 | ViGEmBus driver not installing | Run your terminal as **Administrator** at least once |
 | Camera not detected | Windows Settings → Privacy → Camera → allow desktop apps |
 | "mediapipe not found" error | Run `npx fist-steering update` to rebuild the Python environment |
-| Steering is too sensitive | Increase `tilt` value in setup (default: 45°) |
-| Accidental braking | Increase `eyebrowThreshold` in setup (default: 0.18) |
-| Steering feels laggy | Decrease `smooth` value in setup (default: 0.20) |
-| Steering jitters at center | Increase `deadzone` in setup (default: 0.05) |
+| Steering is too sensitive | `npx fist-steering config set tilt 60` (or higher) |
+| Accidental braking | `npx fist-steering config set eyebrowThreshold 0.25` |
+| Steering feels laggy | `npx fist-steering config set smooth 0.10` (lower = snappier) |
+| Steering jitters at center | `npx fist-steering config set deadzone 0.08` (higher = more stable) |
 
 ---
 
