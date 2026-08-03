@@ -87,6 +87,18 @@ flowchart LR
 
 ---
 
+## 🔒 Privacy & Security
+
+> **All processing is 100% local. No webcam frames, no tracking data, and no personal information ever leave your machine.**
+
+Fist Steering runs two AI pipelines (MediaPipe Hands + FaceMesh) entirely on your CPU using your local Python environment. It has no network connection during tracking, no analytics, no telemetry, and no cloud dependency of any kind.
+
+The only network calls the CLI ever makes:
+- **First run only:** Downloads portable Python 3.11 from `python.org` (only if no compatible Python is found, only once)
+- **Background update check:** Queries `registry.npmjs.org` for the latest version number — no personal data sent
+
+---
+
 ## 🧠 AI Architecture
 
 The tracking backend is a single Python process running two parallel MediaPipe pipelines:
@@ -171,6 +183,9 @@ npx fist-steering update
 # Generate a diagnostic report (for GitHub issues)
 npx fist-steering report
 
+# Remove all fist-steering data (config + Python env)
+npx fist-steering uninstall
+
 # Print version
 npx fist-steering --version
 
@@ -216,6 +231,28 @@ npx fist-steering setup
 | `disableThrottle` | `false` | Disable auto-throttle completely |
 | `disablePalm` | `false` | Disable left palm W-key toggle |
 | `palmFingers` | `3` | Minimum extended fingers to count as "open palm" |
+
+---
+
+## 👁️ Eyebrow Calibration
+
+When braking is enabled, Fist Steering **automatically calibrates your neutral eyebrow position** at the start of every session. You don't need to run any extra command.
+
+**What happens at launch:**
+1. The app asks you to hold a neutral facial expression for **3 seconds**
+2. It measures your resting eyebrow position as a baseline
+3. During play, any raise above that baseline triggers the brake
+
+```
+[CALIBRATION] Hold a NEUTRAL expression for 3 seconds…
+[CALIBRATION] Done. Eyebrow baseline = 0.1293
+```
+
+**Tips for accurate calibration:**
+- Face the camera straight on, at the same distance you'll play from
+- Keep a relaxed, neutral expression — don't smile or frown during calibration
+- If the brake triggers accidentally, increase `eyebrowThreshold`: `npx fist-steering config set eyebrowThreshold 0.25`
+- To skip calibration entirely: `npx fist-steering config set disableBrake true`
 
 ---
 
@@ -309,6 +346,7 @@ flowchart LR
 
 | Symptom | Fix |
 |:---|:---|
+| Windows Defender / SmartScreen blocks first run | See the [Antivirus & SmartScreen](#%EF%B8%8F-antivirus--smartscreen) section below |
 | ViGEmBus driver not installing | Run your terminal as **Administrator** at least once |
 | Camera not detected | Windows Settings → Privacy → Camera → allow desktop apps |
 | "mediapipe not found" error | Run `npx fist-steering update` to rebuild the Python environment |
@@ -316,6 +354,28 @@ flowchart LR
 | Accidental braking | `npx fist-steering config set eyebrowThreshold 0.25` |
 | Steering feels laggy | `npx fist-steering config set smooth 0.10` (lower = snappier) |
 | Steering jitters at center | `npx fist-steering config set deadzone 0.08` (higher = more stable) |
+
+---
+
+## 🛡️ Antivirus & SmartScreen
+
+On first run, Windows Defender or SmartScreen may flag fist-steering. **This is a false positive.** Here's why it happens and what to do:
+
+| What triggers it | Why it's safe |
+|:---|:---|
+| Portable Python download (~25 MB) | Downloaded directly from `python.org`'s official GitHub releases |
+| `vgamepad` installing ViGEmBus driver | ViGEmBus is a widely-used open-source virtual controller driver |
+| npm package running a `.py` file | The Python script is open-source and in this repo |
+
+**If SmartScreen blocks the terminal:**
+1. Click **"More info"** on the SmartScreen popup
+2. Click **"Run anyway"**
+3. This only needs to happen once
+
+**If Windows Defender quarantines the portable Python:**
+1. Open Windows Security → Virus & threat protection → Protection history
+2. Find the quarantined item and click **"Allow"**
+3. Run `npx fist-steering update` to rebuild the environment
 
 ---
 
@@ -336,6 +396,40 @@ This creates a `fist-steering-report.md` file with your OS, Node, Python, venv s
 You can also run `npx fist-steering help` to see this link directly in your terminal.
 
 ---
+
+## 🗑️ Uninstalling
+
+To remove all fist-steering data from your machine:
+
+```bash
+npx fist-steering uninstall
+```
+
+This deletes:
+- `~/.fist-steering/` — your config / settings
+- `~/.fist-steering-env/` — the Python virtual environment + portable runtime (~500 MB)
+
+You will be asked to confirm before anything is deleted.
+
+**To also remove the ViGEmBus driver (optional):**
+1. Open **Windows Settings → Apps → Installed apps**
+2. Search for **"ViGEm Bus Driver"** and uninstall it
+
+**To remove the npm package itself:**
+```bash
+npm uninstall -g fist-steering   # if you installed globally
+```
+
+---
+
+## 🆕 What's New in v1.1.2
+
+| Feature | Details |
+|:---|:---|
+| `npx fist-steering uninstall` command | Safely removes config and Python env with confirmation prompt |
+| Calibration documented | README now explains the auto-calibration step that runs at every launch |
+| Privacy & Security section | Explicitly states all processing is local with no data leaving the machine |
+| Antivirus / SmartScreen guide | Step-by-step instructions for handling Defender / SmartScreen false positives |
 
 ## 🆕 What's New in v1.1.1
 

@@ -51,6 +51,7 @@ Commands:
                  Options: --time <seconds>
   update         Repair/update Python environment
   report         Generate diagnostic report (fist-steering-report.md)
+  uninstall      Remove all fist-steering data (config + Python env)
   version        Print version number
   help           Show this help message
 
@@ -151,6 +152,50 @@ Bugs / Feedback:
     case 'benchmark':
       await benchmarkLib.runBenchmark(argv.time);
       break;
+
+    case 'uninstall': {
+      const { confirm } = require('@inquirer/prompts');
+      const os = require('os');
+      const path = require('path');
+      const configDir = path.join(os.homedir(), '.fist-steering');
+      const venvDir  = path.join(os.homedir(), '.fist-steering-env');
+
+      console.log('\n\x1b[1m\x1b[31mUninstall Fist Steering\x1b[0m\n');
+      console.log('This will permanently delete:');
+      console.log(`  • ${configDir}  (your config / settings)`);
+      console.log(`  • ${venvDir}  (Python environment + portable runtime)`);
+      console.log();
+
+      const yes = await confirm({ message: 'Are you sure you want to remove all fist-steering data?', default: false });
+      if (!yes) {
+        console.log('\x1b[33mAborted. Nothing was deleted.\x1b[0m');
+        break;
+      }
+
+      let removed = [];
+      for (const dir of [configDir, venvDir]) {
+        if (fs.existsSync(dir)) {
+          fs.rmSync(dir, { recursive: true, force: true });
+          removed.push(dir);
+        }
+      }
+
+      if (removed.length > 0) {
+        console.log('\n\x1b[32m✓ Deleted:\x1b[0m');
+        removed.forEach(d => console.log(`  ${d}`));
+      } else {
+        console.log('\x1b[33mNothing to delete — directories did not exist.\x1b[0m');
+      }
+
+      console.log('\n\x1b[1mTo also remove the ViGEmBus driver:\x1b[0m');
+      console.log('  1. Open Windows Settings → Apps → Installed apps');
+      console.log('  2. Search for "ViGEm Bus Driver" and uninstall it');
+      console.log();
+      console.log('\x1b[90mTo uninstall the npm package itself:\x1b[0m');
+      console.log('  npm uninstall -g fist-steering  (if globally installed)');
+      console.log();
+      break;
+    }
     
     case 'start':
     default:
