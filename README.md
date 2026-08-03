@@ -337,13 +337,21 @@ You can also run `npx fist-steering help` to see this link directly in your term
 
 ---
 
+## 🆕 What's New in v1.1.1
+
+| Feature | Details |
+|:---|:---|
+| GitHub issues link in `report` command | After generating a report, the CLI now prints the exact URL to open an issue |
+| GitHub issues link in `--help` | `npx fist-steering help` shows where to report bugs |
+| GitHub issues link on crash | Any unexpected error now prints the issues URL + a hint to run `report` |
+
 ## 🆕 What's New in v1.1.0
 
 | Feature | Command |
 |:---|:---|
 | View all your settings at a glance | `npx fist-steering config show` |
 | Change one setting without the wizard | `npx fist-steering config set <key> <value>` |
-| Bug reporting link built into the CLI | `npx fist-steering help` / `npx fist-steering report` |
+| Help discovery tip after setup | Setup wizard now ends with a tip to run `npx fist-steering help` |
 | Doctor admin check is now advisory only | `npx fist-steering doctor` no longer fails if not running as admin |
 
 ---
