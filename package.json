@@ -1,6 +1,6 @@
 {
   "name": "fist-steering",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "description": "Control any driving game with your bare hands — no hardware, no phone, just a webcam. Virtual Xbox 360 controller via MediaPipe hand/face tracking.",
   "main": "bin/gamecv.js",
   "bin": {
