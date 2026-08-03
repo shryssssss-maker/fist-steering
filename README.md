@@ -444,17 +444,22 @@ npm uninstall -g fist-steering   # if you installed globally
 
 ---
 
+## 🆕 What's New in v1.1.3
+
+| Feature | Details |
+|:---|:---|
+| Smarter update banner | Detects npx vs global install and shows the correct update command (`npx fist-steering@latest` vs `npm update -g fist-steering`) |
+| Proper semver comparison | Dev builds (local version newer than npm) no longer trigger a false update banner |
+| 🔄 Staying Updated section | README now explains the auto-update banner and the `@latest` trick for npx users |
+
 ## 🆕 What's New in v1.1.2
 
 | Feature | Details |
 |:---|:---|
-| `npx fist-steering uninstall` command | Safely removes config and Python env with confirmation prompt |
-| Smarter update banner | Detects npx vs global install and shows the correct update command (`npx@latest` vs `npm update -g`) |
-| Proper semver comparison | Dev builds (newer than npm) no longer trigger a false update banner |
-| Calibration documented | README now explains the auto-calibration step that runs at every launch |
-| Privacy & Security section | Explicitly states all processing is local with no data leaving the machine |
-| Antivirus / SmartScreen guide | Step-by-step instructions for handling Defender / SmartScreen false positives |
-| Staying Updated section | README explains how auto-update detection works and the `@latest` trick for npx users |
+| `npx fist-steering uninstall` command | Safely removes config and Python env with confirmation prompt, plus ViGEmBus removal steps |
+| 👁️ Eyebrow Calibration section | README explains the auto-calibration step at launch — hold neutral expression for 3 seconds |
+| 🔒 Privacy & Security section | Explicitly states all processing is 100% local with no data leaving the machine |
+| 🛡️ Antivirus / SmartScreen guide | Step-by-step fix for Defender / SmartScreen false positives on first run |
 
 ## 🆕 What's New in v1.1.1
 
