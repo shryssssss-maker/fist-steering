@@ -1,0 +1,50 @@
+{
+  "name": "fist-steering",
+  "version": "1.0.8",
+  "description": "Control any driving game with your bare hands — no hardware, no phone, just a webcam. Virtual Xbox 360 controller via MediaPipe hand/face tracking.",
+  "main": "bin/gamecv.js",
+  "bin": {
+    "fist-steering": "bin/gamecv.js",
+    "gamecv": "bin/gamecv.js"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "fist_steering.py",
+    "README.md"
+  ],
+  "scripts": {
+    "start": "node bin/gamecv.js",
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "keywords": [
+    "gamecv",
+    "fist-steering",
+    "virtual-controller",
+    "mediapipe",
+    "opencv",
+    "vgamepad",
+    "gaming",
+    "webcam"
+  ],
+  "author": "shryssssss-maker",
+  "license": "MIT",
+  "os": [
+    "win32"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shryssssss-maker/fist-steering.git"
+  },
+  "bugs": {
+    "url": "https://github.com/shryssssss-maker/fist-steering/issues"
+  },
+  "homepage": "https://github.com/shryssssss-maker/fist-steering#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^7.0.1",
+    "mri": "^1.2.0"
+  }
+}

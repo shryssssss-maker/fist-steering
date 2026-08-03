@@ -1,329 +1,306 @@
 <div align="center">
 
-# 🎮 Fist Steering Wheel Controller
+# 🎮 Fist Steering
 
-**Control any driving game with your bare hands — no hardware, no phone, just a webcam.**
+### Control any driving game with your bare hands — no hardware required.
 
-[![Python](https://img.shields.io/badge/Python-3.9%2B-blue?style=for-the-badge&logo=python)](https://python.org)
-[![Windows](https://img.shields.io/badge/Windows-Only-0078D4?style=for-the-badge&logo=windows)](https://microsoft.com)
-[![MediaPipe](https://img.shields.io/badge/MediaPipe-1.0-orange?style=for-the-badge)](https://mediapipe.dev)
-[![ViGEmBus](https://img.shields.io/badge/ViGEmBus-Virtual%20Xbox-green?style=for-the-badge)](https://github.com/nefarius/ViGEmBus)
+A virtual Xbox 360 controller powered by **Google MediaPipe AI** and your webcam.  
+Steer by tilting your fists. Brake by raising your eyebrows. Zero latency. Zero setup friction.
 
-> A single Python process that reads your webcam, tracks your hands and face in real-time using MediaPipe, and outputs a **virtual Xbox 360 controller** that any game can read — analog steering, a brake trigger, and a W-key toggle, all driven purely by gesture.
-
----
-
-### 🚗 Try it immediately — no install needed
-
-**Test game:** [Super Star Car on Poki](https://poki.com/en/g/super-star-car)  
-Open the game, launch the script, tilt your fists — you're racing.
+[![npm](https://img.shields.io/npm/v/fist-steering?color=blueviolet&style=for-the-badge&logo=npm)](https://www.npmjs.com/package/fist-steering)
+[![Windows Only](https://img.shields.io/badge/platform-Windows-0078D6?style=for-the-badge&logo=windows)](https://www.microsoft.com/windows)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)](LICENSE)
 
 </div>
 
 ---
 
-## ✨ What it does
+## ⚡ Quick Start
 
-| Gesture | What happens |
-|---|---|
-| 🤜🤛 Hold **both fists** up, tilt left/right | Analog left-stick X-axis — proportional steering |
-| 🙍 **Raise eyebrows** | Left trigger fully pressed — brake |
-| 🤚 Open **left palm** | Toggles `W` key held / released — gas in keyboard games |
-| *(automatic)* | Right trigger at 40% — constant auto-throttle when not braking |
+No Python setup. No environment configuration. One command.
 
-> **Why not keyboard?**  
-> Keyboard keys are binary (down/up). A steering wheel needs a *continuous* value from −1.0 to +1.0. This project outputs a real virtual Xbox 360 controller axis — the same signal a physical thumbstick sends — so the game sees smooth, proportional turning at every angle.
+```bash
+npx fist-steering
+```
+
+On first run the CLI automatically:
+1. Detects your Python version
+2. Downloads **portable Python 3.11** if needed (~25 MB, doesn't touch your system)
+3. Creates an isolated virtual environment
+4. Installs OpenCV + MediaPipe + vgamepad
+5. Runs the setup wizard for your camera and preferences
+6. Launches the controller
+
+> **After the first run, subsequent launches are instant** — the environment is cached in `~/.fist-steering-env/`.
 
 ---
 
-## 🏗️ Architecture
+## 🚀 How It Works
 
 ```mermaid
 flowchart TD
-    CAM["Webcam via OpenCV"]
-    FLIP["Horizontal Flip (mirror)"]
-    MP_H["MediaPipe Hands (max 2)"]
-    MP_F["MediaPipe FaceMesh (478 pts)"]
-    STEER["Steering atan2 / 45deg"]
-    SMOOTH["Smooth 0.20 prev + 0.80 raw"]
-    DEAD["Deadzone below 0.05 zeroed"]
-    BROW["Eyebrow (eye_y - brow_y) / face_h"]
-    BRAKE["Brake delta > 0.18"]
-    PALM["Left Palm 3+ fingers extended"]
-    WTOG["Toggle W key (rising edge)"]
-    OUT_S["Left Stick X axis"]
-    OUT_B["Left Trigger 0 or 255"]
-    OUT_T["Right Trigger 40%"]
-    OUT_W["pynput W press/release"]
-    GPAD["Virtual Xbox 360 vgamepad"]
-    HUD["OpenCV live HUD overlay"]
-
-    CAM --> FLIP
-    FLIP --> MP_H
-    FLIP --> MP_F
-    FLIP --> HUD
-    MP_H --> STEER
-    STEER --> SMOOTH
-    SMOOTH --> DEAD
-    DEAD --> OUT_S
-    MP_H --> PALM
-    PALM --> WTOG
-    WTOG --> OUT_W
-    MP_F --> BROW
-    BROW --> BRAKE
-    BRAKE --> OUT_B
-    BRAKE -->|not braking| OUT_T
-    OUT_S --> GPAD
-    OUT_B --> GPAD
-    OUT_T --> GPAD
+    A["npx fist-steering"] --> B{Python 3.8–3.11\ndetected?}
+    B -- Yes --> D["Create isolated venv\n~/.fist-steering-env/"]
+    B -- No --> C["Prompt user to\nauto-download Python 3.11\n~25 MB, no PATH changes"]
+    C -- Accepts --> D
+    C -- Declines --> EXIT["Print manual install\ninstructions & exit cleanly"]
+    D --> E["pip install\nopencv-python\nmediapipe==0.10.21\nvgamepad\npynput"]
+    E --> F["Setup Wizard\n(Camera · Smoothing · Deadzone)"]
+    F --> G["Launch Python\nTracking Backend"]
 ```
-
----
-
-## 🧠 How each gesture is computed
-
-### Steering — wrist angle → analog axis
-
-```mermaid
-sequenceDiagram
-    participant Cam as Webcam
-    participant MP as MediaPipe Hands
-    participant Math as Steering Math
-    participant GP as Virtual Gamepad
-
-    Cam->>MP: RGB frame
-    MP-->>Math: left wrist x,y and right wrist x,y
-    Note over Math: dx = right.x - left.x
-    Note over Math: dy = right.y - left.y
-    Note over Math: angle = degrees(atan2(dy, dx))
-    Note over Math: steering = clamp(angle / 45, -1, 1)
-    Note over Math: smooth = 0.20 x prev + 0.80 x steering
-    Note over Math: if abs(smooth) < 0.05 then zero
-    Math-->>GP: left_joystick(x = int16(smooth))
-```
-
-**When fewer than 2 hands are visible**, `smooth_steer *= 0.85` each frame — steering decays to zero rather than freezing at the last value.
-
----
-
-### Brake — eyebrow raise → left trigger
-
-```mermaid
-sequenceDiagram
-    participant FM as FaceMesh 478 landmarks
-    participant Calc as Ratio Calc
-    participant Cal as Calibration Baseline
-    participant GP as Virtual Gamepad
-
-    FM-->>Calc: lm[105] lm[334] eyebrow tops
-    FM-->>Calc: lm[159] lm[386] upper eyelids
-    FM-->>Calc: lm[10] forehead and lm[152] chin
-    Note over Calc: brow_y = avg(left_brow, right_brow)
-    Note over Calc: eye_y  = avg(left_eye,  right_eye)
-    Note over Calc: face_h = abs(chin_y - forehead_y)
-    Note over Calc: ratio  = (eye_y - brow_y) / face_h
-    Cal-->>Calc: baseline = mean of 3s neutral samples
-    Note over Calc: delta = ratio - baseline
-    Note over Calc: if delta > 0.18 then brake ON
-    Calc-->>GP: left_trigger(255) or left_trigger(0)
-```
-
----
-
-### W-key toggle — left open palm
-
-```mermaid
-stateDiagram-v2
-    direction LR
-    [*] --> FIST : startup
-    FIST --> PALM : open left palm
-    PALM --> FIST : open left palm again
-
-    state FIST {
-        [*] --> IDLE
-        IDLE : Left fist closed, W released
-    }
-    state PALM {
-        [*] --> ACTIVE
-        ACTIVE : Left palm open, W held
-    }
-```
-
-**Side detection:** After `cv2.flip(frame, 1)` (mirror mode), `wrist_x < 0.5` reliably identifies the user's physical left hand regardless of which hand MediaPipe labels it.
-
----
-
-## 🗂️ Controller output map
 
 ```mermaid
 flowchart LR
-    G1[Both fists tilted] --> O1[Left Stick X]
-    G2[Raise eyebrows] --> O2[Left Trigger]
-    G3[Left palm open toggle] --> O3[pynput W key]
-    G4[Auto no brake] --> O4[Right Trigger 40%]
+    CAM["📷 Webcam\n(up to 1280×720)"]
+    MP_HANDS["MediaPipe\nHands AI\n(2 hands tracked)"]
+    MP_FACE["MediaPipe\nFaceMesh AI\n(468 facial landmarks)"]
+    STEER["Steering\nComputation"]
+    BRAKE["Eyebrow\nBrake Detection"]
+    PALM["Left Palm\nW-Key Toggle"]
+    GAMEPAD["vgamepad\nVirtual Xbox 360"]
+    GAME["🎮 Racing Game"]
+
+    CAM --> MP_HANDS
+    CAM --> MP_FACE
+    MP_HANDS --> STEER
+    MP_HANDS --> PALM
+    MP_FACE --> BRAKE
+    STEER --> GAMEPAD
+    BRAKE --> GAMEPAD
+    PALM --> GAMEPAD
+    GAMEPAD --> GAME
 ```
 
 ---
 
-## ⚙️ Tunable constants
+## 🎮 Controls
 
-All constants live at the **very top of `fist_steering.py`** — edit once, nowhere else.
-
-| Constant | Default | What it controls |
-|---|---|---|
-| `MAX_TILT_DEG` | `45.0` | Tilt angle (°) for full ±1.0 steering lock |
-| `SMOOTHING` | `0.20` | Exponential smoothing weight — 0 = raw, 1 = frozen |
-| `DEADZONE` | `0.05` | Noise floor — values below this are zeroed and rescaled |
-| `EYEBROW_RAISE_THRESHOLD` | `0.18` | Eyebrow-delta fraction above baseline that triggers brake |
-| `CALIBRATION_SECONDS` | `3` | Hold-neutral countdown duration at startup |
-| `AUTO_THROTTLE_ENABLED` | `True` | Toggle constant right-trigger throttle on/off |
-| `AUTO_THROTTLE_VALUE` | `0.40` | Right-trigger strength when auto-throttle is active |
-| `LOST_HAND_DECAY` | `0.85` | Per-frame steering decay multiplier when hands leave frame |
-| `PALM_KEYS_ENABLED` | `True` | Toggle the left-palm → W feature on/off |
-| `PALM_OPEN_FINGERS` | `3` | Minimum extended fingers to count as "open palm" (1–4) |
-| `CAMERA_INDEX` | `0` | Webcam index — change if you have multiple cameras |
+| Your Body Gesture | Game Action | Controller Mapping |
+|:---|:---|:---|
+| Both fists raised like a steering wheel | Steer Left / Right | Left Analog Stick X Axis |
+| Tilt fists right (right hand lower) | Steer Right | Positive X Axis |
+| Tilt fists left (left hand lower) | Steer Left | Negative X Axis |
+| Raise both eyebrows | Brake | Left Trigger (0–100%) |
+| No brake active | Auto-throttle | Right Trigger (40% constant) |
+| Open Left Palm | Toggle `W` key held | Keyboard `W` press/release |
+| Press `Q` in camera window | Exit cleanly | — |
 
 ---
 
-## 🚀 Setup — Windows (from GitHub)
+## 🧠 AI Architecture
 
-### Prerequisites
-
-- **Windows 10 or 11** (64-bit)
-- **Python 3.9 – 3.11** — [download here](https://www.python.org/downloads/)  
-  ✅ Check **"Add Python to PATH"** during install
-- A **webcam** (built-in or USB)
-
----
-
-### Step 1 — Clone the repo
-
-```powershell
-git clone https://github.com/shryssssss-maker/fist-steering.git
-cd fist-steering
-```
-
----
-
-### Step 2 — Install Python dependencies
-
-```powershell
-pip install opencv-python "mediapipe==0.10.21" vgamepad pynput
-```
-
-> **`mediapipe==0.10.21`** is pinned because version 1.x removed the `mp.solutions` API that this project uses.
-
----
-
-### Step 3 — Install the ViGEmBus driver (one-time)
-
-`vgamepad` wraps the **ViGEmBus** kernel driver to create virtual Xbox controllers. It will attempt to auto-install on first run.
-
-**If the auto-install fails** (common on UAC-hardened systems):
-
-1. Right-click your terminal shortcut → **Run as Administrator**
-2. `python fist_steering.py`
-3. Accept the **Nefarius Virtual Gamepad Emulation Bus Driver** license dialog that appears
-4. After install completes, you never need admin again
-
----
-
-### Step 4 — Run
-
-```powershell
-python fist_steering.py
-```
-
-**What happens:**
+The tracking backend is a single Python process running two parallel MediaPipe pipelines:
 
 ```mermaid
-sequenceDiagram
-    participant Script
-    participant Window as Camera Window
-    participant Game
-
-    Script->>Window: Open Fist Steering Calibration
-    Note over Window: 3 second countdown hold neutral expression
-    Window-->>Script: Eyebrow baseline saved
-    Script->>Window: Open Fist Steering Wheel Controller
-    Note over Window: Live hand and face tracking active
-    Script->>Game: Virtual Xbox 360 controller appears
-    Note over Game: Go to Settings Controls and select Xbox 360 Controller
-    loop Every frame
-        Script->>Game: left_joystick steering value
-        Script->>Game: left_trigger brake
-        Script->>Game: right_trigger throttle 40%
+flowchart TB
+    subgraph Pipeline1 ["Hand Tracking Pipeline"]
+        direction TB
+        H1["Raw webcam frame\n(BGR)"]
+        H2["Flip horizontally\n(mirror mode)"]
+        H3["BGR → RGB"]
+        H4["MediaPipe Hands\nmax_hands=2\nconfidence=0.6"]
+        H5["Extract wrist landmarks\n(landmark index 0)"]
+        H6["Sort L→R by X position"]
+        H7["Compute tilt angle\natan2(dy, dx)"]
+        H8["Apply smoothing\nα = 0.20 (EMA)"]
+        H9["Apply deadzone\n±0.05 threshold"]
+        H10["Map to int16\n±32768 joystick range"]
+        H1 --> H2 --> H3 --> H4 --> H5 --> H6 --> H7 --> H8 --> H9 --> H10
     end
+
+    subgraph Pipeline2 ["Face / Eyebrow Pipeline"]
+        direction TB
+        F1["Same RGB frame"]
+        F2["MediaPipe FaceMesh\n468 landmarks\nrefine_landmarks=True"]
+        F3["Extract eyebrow Y\n(landmarks 105 & 334)"]
+        F4["Extract eyelid Y\n(landmarks 159 & 386)"]
+        F5["Normalize by face height\n(chin 152 – forehead 10)"]
+        F6["Compare to calibrated\nneutral baseline"]
+        F7["Brake if delta > 0.18\n(configurable threshold)"]
+        F1 --> F2 --> F3 --> F4 --> F5 --> F6 --> F7
+    end
+
+    subgraph Output ["Virtual Gamepad Output"]
+        G1["vgamepad\nVX360Gamepad"]
+        G2["left_joystick() → steering"]
+        G3["left_trigger() → brake"]
+        G4["right_trigger() → throttle"]
+        G1 --> G2
+        G1 --> G3
+        G1 --> G4
+    end
+
+    H10 --> G2
+    F7 --> G3
 ```
 
 ---
 
-### Step 5 — Play!
+## 🖥️ CLI Commands
 
-Open [Super Star Car](https://poki.com/en/g/super-star-car) (or any driving game), go to its **Controls / Input settings**, and select the **Xbox 360 Controller** that has appeared.
+```bash
+# Launch the controller (runs setup on first use)
+npx fist-steering
 
-Then:
+# Re-run the configuration wizard
+npx fist-steering setup
 
-| Do this | Game input |
-|---|---|
-| ✊✊ Hold both fists up, level | Car goes straight |
-| ↙️ Tilt left (right wrist higher) | Steer left — continuously proportional |
-| ↘️ Tilt right (right wrist lower) | Steer right — continuously proportional |
-| 😲 Raise eyebrows | Brake |
-| 🖐 Open left palm | W key held (gas in keyboard-mode games) |
-| 🖐 Open left palm again | W key released |
-| `Q` in camera window | Clean quit — all inputs reset to neutral |
+# Delete config and start wizard from scratch
+npx fist-steering reset
 
----
+# Run system health checks (Flutter-style doctor)
+npx fist-steering doctor
 
-## 📦 Package as a standalone `.exe`
+# Measure FPS, latency, and CPU/RAM performance
+npx fist-steering benchmark
 
-No Python required on the target machine:
+# Benchmark for exactly N seconds
+npx fist-steering benchmark --time 30
 
-```powershell
-pip install pyinstaller
-pyinstaller --onefile --noconsole --name FistSteering fist_steering.py
+# Force rebuild / update the Python environment
+npx fist-steering update
+
+# Generate a diagnostic report (for GitHub issues)
+npx fist-steering report
+
+# Install globally (run without npx)
+npm install -g fist-steering
+fist-steering
 ```
 
-Output: `dist\FistSteering.exe`
+---
 
-> ⚠️ The end user still needs **ViGEmBus** installed. The first run of the `.exe` will attempt to auto-install it — run as Administrator once to allow that.
+## ⚙️ Configuration
+
+Your settings are saved at `~/.fist-steering/config.json` and can be changed by re-running `npx fist-steering setup`.
+
+| Setting | Default | Description |
+|:---|:---:|:---|
+| `camera` | `0` | Camera index (0 = first webcam) |
+| `smooth` | `0.20` | Exponential moving average factor. `0.0` = raw, `0.99` = heavy lag |
+| `deadzone` | `0.05` | Ignore steering inputs smaller than this to filter micro-jitters |
+| `tilt` | `45.0` | Max tilt angle in degrees before steering reaches ±1.0 |
+| `eyebrowThreshold` | `0.18` | How much above neutral your eyebrows must go to trigger a brake |
+| `throttleValue` | `0.40` | Auto-throttle right trigger value when not braking (0.0–1.0) |
+| `disableBrake` | `false` | Disable eyebrow braking (skips FaceMesh, saves CPU) |
+| `disableThrottle` | `false` | Disable auto-throttle completely |
+| `disablePalm` | `false` | Disable left palm W-key toggle |
+| `palmFingers` | `3` | Minimum extended fingers to count as "open palm" |
 
 ---
 
-## 🔧 Troubleshooting
+## 🐍 Python Runtime Management
+
+```mermaid
+flowchart TD
+    A["CLI Starts"] --> B{"Portable Python 3.11\nalready in\n~/.fist-steering-env/runtime/?"}
+    B -- Yes --> G["Use portable runtime\n(instant, zero setup)"]
+    B -- No --> C{"py -3.11 / py -3.10\n/ python3.11 etc.\nfound on system?"}
+    C -- Yes --> G
+    C -- No --> D{"Any Python found?\n(e.g. Python 3.14)"}
+    D -- None found --> E["Explain: no Python found\nOffer to auto-download\nportable Python 3.11"]
+    D -- Unsupported version --> F["Explain: MediaPipe requires\nPython 3.8–3.11\nOffer to auto-download"]
+    E --> H{"User says yes?"}
+    F --> H
+    H -- Yes --> I["Download standalone\ncpython-3.11\n~25 MB, streamed with\nlive progress bar"]
+    H -- No --> J["Print manual install\ninstructions\nExit cleanly\n(nothing modified)"]
+    I --> K["Extract to\n~/.fist-steering-env/runtime/\n(no PATH changes,\nno admin rights needed)"]
+    K --> G
+    G --> L["Create venv\n~/.fist-steering-env/"]
+    L --> M["pip install all deps"]
+```
+
+> **Your existing Python 3.14 (or any version) is never modified or uninstalled.**  
+> The portable runtime lives entirely inside `~/.fist-steering-env/runtime/`.
+
+---
+
+## 🩺 Doctor Command
+
+The `doctor` command inspects your system and reports the status of every component:
+
+```mermaid
+flowchart LR
+    DR["npx fist-steering doctor"]
+    DR --> OS["✓ Operating System\nWindows 10/11"]
+    DR --> NODE["✓ Node.js ≥ 18"]
+    DR --> PY["✓ Python Runtime\n(System or Portable)"]
+    DR --> VENV["✓ Virtual Environment\nHealthy / Corrupted"]
+    DR --> DEPS["✓ cv2 · mediapipe\nvgamepad · pynput"]
+    DR --> CAM["✓ Camera\nDetected / Not found"]
+    DR --> ADMIN["✓ Administrator\nStatus for ViGEmBus"]
+    DR --> CONF["✓ Configuration\nValid JSON / Defaults"]
+```
+
+---
+
+## 📁 Project Structure
+
+```
+fist-steering/
+├── bin/
+│   └── gamecv.js          # CLI entry point — routes all commands
+├── lib/
+│   ├── python.js          # Python runtime detection, download, venv management
+│   ├── setup.js           # Interactive setup wizard (camera, smoothing, deadzone)
+│   ├── config.js          # Read/write ~/.fist-steering/config.json
+│   ├── doctor.js          # System health checks
+│   ├── benchmark.js       # FPS / performance benchmarking
+│   ├── report.js          # Diagnostic report generator
+│   └── update-checker.js  # Background npm update notifications
+├── fist_steering.py       # Python tracking backend (MediaPipe + vgamepad)
+└── package.json
+```
+
+---
+
+## 🔧 How Steering Math Works
+
+```mermaid
+flowchart LR
+    WL["Left Wrist\n(x₁, y₁)"]
+    WR["Right Wrist\n(x₂, y₂)"]
+    A["angle = atan2(dy, dx)\nin degrees"]
+    N["Normalize\nangle ÷ 45°\n→ -1.0 to +1.0"]
+    S["Exponential\nMoving Average\nα × prev + (1-α) × raw"]
+    D["Deadzone\n|value| < 0.05 → 0\nrescale rest to ±1"]
+    J["int16 Joystick\nvalue × 32767"]
+
+    WL --> A
+    WR --> A
+    A --> N --> S --> D --> J
+```
+
+---
+
+## ⚠️ Troubleshooting
+
+**`npx fist-steering doctor`** will diagnose most issues automatically. Common problems:
 
 | Symptom | Fix |
-|---|---|
-| `AttributeError: module 'mediapipe' has no attribute 'solutions'` | `pip install "mediapipe==0.10.21"` |
-| `Could not create virtual gamepad` | Run as Administrator once to install ViGEmBus |
-| Steering jitters / drifts | Increase `SMOOTHING` or `DEADZONE` |
-| Brake fires too easily | Increase `EYEBROW_RAISE_THRESHOLD` |
-| W toggles by itself | Increase `PALM_OPEN_FINGERS` to 4 |
-| Wrong camera opens | Change `CAMERA_INDEX` to 1, 2, etc. |
-| Steering reversed | Physically hold fists the other way, or negate the atan2 result |
+|:---|:---|
+| ViGEmBus driver not installing | Run your terminal as **Administrator** at least once |
+| Camera not detected | Windows Settings → Privacy → Camera → allow desktop apps |
+| "mediapipe not found" error | Run `npx fist-steering update` to rebuild the Python environment |
+| Steering is too sensitive | Increase `tilt` value in setup (default: 45°) |
+| Accidental braking | Increase `eyebrowThreshold` in setup (default: 0.18) |
+| Steering feels laggy | Decrease `smooth` value in setup (default: 0.20) |
+| Steering jitters at center | Increase `deadzone` in setup (default: 0.05) |
 
 ---
 
-## 🏛️ Tech stack
+## 📋 Requirements
 
-| Layer | Library | Purpose |
-|---|---|---|
-| Computer vision | `opencv-python 5.x` | Webcam capture, frame flip, HUD drawing |
-| Hand tracking | `mediapipe 0.10.21` — `mp.solutions.hands` | 21 landmarks per hand, up to 2 hands |
-| Face tracking | `mediapipe 0.10.21` — `mp.solutions.face_mesh` | 478 landmarks, `refine_landmarks=True` |
-| Virtual controller | `vgamepad 0.1.0` + ViGEmBus | Virtual Xbox 360 `VX360Gamepad` |
-| Keyboard injection | `pynput 1.8.x` | W key press/release for the palm toggle |
-| Packaging | `pyinstaller` | Single-file `.exe` with `--onefile --noconsole` |
-
----
-
-## 📄 License
-
-MIT — do whatever you want with it.
+| Requirement | Details |
+|:---|:---|
+| **OS** | Windows 10 or 11 (64-bit) |
+| **Node.js** | ≥ 18.0.0 |
+| **Python** | 3.8, 3.9, 3.10, or 3.11 (auto-downloaded if missing) |
+| **Webcam** | Any USB or built-in webcam |
+| **ViGEmBus** | Auto-installed by `vgamepad` on first run (requires admin once) |
 
 ---
 
-<div align="center">
-Made with ☕ and a webcam
-</div>
+## 📜 License
+
+MIT © [shryssssss-maker](https://github.com/shryssssss-maker)

@@ -20,32 +20,51 @@
 """
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  TUNABLE CONSTANTS  — edit here, nowhere else
+#  ARGPARSE & CONSTANTS
 # ─────────────────────────────────────────────────────────────────────────────
+import argparse
+import json
 
-# Steering
-MAX_TILT_DEG: float = 45.0    # tilt angle (deg) that maps to full ±1.0 steering lock
-SMOOTHING: float = 0.20        # 0 = raw, 1 = frozen; 0.20 = light smoothing
-DEADZONE: float = 0.05         # steering magnitudes below this are zeroed out
+parser = argparse.ArgumentParser(description="Fist Steering Wheel Controller")
+parser.add_argument("--camera", type=int, default=0)
+parser.add_argument("--smooth", type=float, default=0.20)
+parser.add_argument("--deadzone", type=float, default=0.05)
+parser.add_argument("--tilt", type=float, default=45.0)
+parser.add_argument("--disable-brake", action="store_true")
+parser.add_argument("--eyebrow-threshold", type=float, default=0.18)
+parser.add_argument("--disable-throttle", action="store_true")
+parser.add_argument("--throttle-value", type=float, default=0.40)
+parser.add_argument("--disable-palm", action="store_true")
+parser.add_argument("--palm-fingers", type=int, default=3)
+parser.add_argument("--probe-cameras", action="store_true")
+parser.add_argument("--benchmark", action="store_true")
+parser.add_argument("--benchmark-time", type=float, default=0.0)
+parser.add_argument("--verbose", action="store_true")
+parser.add_argument("--quiet", action="store_true")
 
-# Brake — eyebrow raise
-EYEBROW_RAISE_THRESHOLD: float = 0.18   # fraction above baseline that triggers brake
-CALIBRATION_SECONDS: int = 3            # duration of neutral-expression countdown
+args, _ = parser.parse_known_args()
 
-# Auto-throttle (right trigger when not braking)
-AUTO_THROTTLE_ENABLED: bool = True      # set False to disable auto-throttle entirely
-AUTO_THROTTLE_VALUE: float = 0.40       # 0.0–1.0 fraction of full trigger
+MAX_TILT_DEG: float = args.tilt
+SMOOTHING: float = args.smooth
+DEADZONE: float = args.deadzone
+EYEBROW_RAISE_THRESHOLD: float = args.eyebrow_threshold
+CALIBRATION_SECONDS: int = 3
+AUTO_THROTTLE_ENABLED: bool = not args.disable_throttle
+AUTO_THROTTLE_VALUE: float = args.throttle_value
+LOST_HAND_DECAY: float = 0.85
+PALM_KEYS_ENABLED: bool = not args.disable_palm
+PALM_OPEN_FINGERS: int = args.palm_fingers
+CAMERA_INDEX: int = args.camera
+DISABLE_BRAKE: bool = args.disable_brake
+BENCHMARK_MODE: bool = args.benchmark
+BENCHMARK_TIME: float = args.benchmark_time
+VERBOSE: bool = args.verbose
+QUIET: bool = args.quiet
 
-# Decay when fewer than 2 hands are visible
-LOST_HAND_DECAY: float = 0.85          # multiply steering by this each frame
-
-# Open-palm key toggles
-PALM_KEYS_ENABLED: bool = True   # set False to disable palm→key feature entirely
-PALM_OPEN_FINGERS: int = 3       # how many fingers must be extended to count as "open palm"
-                                  # (range 1-4; 3 is reliable; lower = more sensitive)
-
-# Camera
-CAMERA_INDEX: int = 0                  # 0 = default webcam
+def log(msg, verbose_only=False):
+    if QUIET: return
+    if verbose_only and not VERBOSE: return
+    print(msg)
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  IMPORTS
@@ -67,7 +86,7 @@ import numpy as np
 try:
     import vgamepad as vg
 except ImportError:
-    print(
+    log(
         "\n[ERROR] vgamepad is not installed.\n"
         "Run:  pip install vgamepad\n"
         "ViGEmBus driver will be auto-installed on first run (requires admin).\n"
@@ -101,17 +120,8 @@ FINGER_MCPS: tuple = (5,  9, 13, 17)   # their corresponding MCP knuckles
 #  VIRTUAL GAMEPAD
 # ─────────────────────────────────────────────────────────────────────────────
 
-print("\n[INIT] Creating virtual Xbox 360 controller via vgamepad…")
-try:
-    gamepad = vg.VX360Gamepad()
-    print("[INIT] Virtual controller created successfully.")
-except Exception as exc:
-    print(
-        f"\n[ERROR] Could not create virtual gamepad: {exc}\n"
-        "Make sure ViGEmBus driver is installed.\n"
-        "Run the app once as Administrator so vgamepad can auto-install it.\n"
-    )
-    sys.exit(1)
+# Gamepad initialized in main()
+gamepad = None
 
 
 # Keyboard controller for the palm→key toggles
@@ -128,19 +138,20 @@ def _release_keys_if_held() -> None:
         except Exception:
             pass
         _w_held = False
-        print("[EXIT] W key released.")
+        log("[EXIT] W key released.")
 
 
 def reset_gamepad() -> None:
     """Reset all gamepad inputs to neutral — always called on exit."""
     _release_keys_if_held()
     try:
-        gamepad.left_joystick(x_value=0, y_value=0)
-        gamepad.right_joystick(x_value=0, y_value=0)
-        gamepad.left_trigger(value=0)
-        gamepad.right_trigger(value=0)
-        gamepad.update()
-        print("[EXIT] Gamepad reset to neutral.")
+        if gamepad:
+            gamepad.left_joystick(x_value=0, y_value=0)
+            gamepad.right_joystick(x_value=0, y_value=0)
+            gamepad.left_trigger(value=0)
+            gamepad.right_trigger(value=0)
+            gamepad.update()
+            log("[EXIT] Gamepad reset to neutral.", verbose_only=True)
     except Exception:
         pass  # already gone — ignore
 
@@ -180,7 +191,7 @@ def run_calibration(
     samples = []
     window_name = "Fist Steering — Calibration"
 
-    print(
+    log(
         f"\n[CALIBRATION] Hold a NEUTRAL expression for {CALIBRATION_SECONDS} seconds…"
     )
 
@@ -228,11 +239,11 @@ def run_calibration(
             return None
 
     if not samples:
-        print("[CALIBRATION] No face detected — using default baseline 0.30")
+        log("[CALIBRATION] No face detected — using default baseline 0.30")
         return 0.30
 
     baseline = float(np.mean(samples))
-    print(f"[CALIBRATION] Done. Eyebrow baseline = {baseline:.4f}")
+    log(f"[CALIBRATION] Done. Eyebrow baseline = {baseline:.4f}")
     return baseline
 
 
@@ -379,25 +390,50 @@ def draw_hud(
 #  MAIN LOOP
 # ─────────────────────────────────────────────────────────────────────────────
 
+def probe_cameras():
+    cameras = []
+    import cv2
+    import json
+    for i in range(10):
+        cap = cv2.VideoCapture(i)
+        if cap.isOpened():
+            w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            cameras.append({"index": i, "name": f"Camera {i} ({w}x{h})"})
+            cap.release()
+    print(json.dumps(cameras))
+    sys.exit(0)
+
 def main() -> None:
-    print(
-        "\n"
-        "+----------------------------------------------------------+\n"
-        "|         FIST STEERING WHEEL CONTROLLER                  |\n"
-        "+----------------------------------------------------------+\n"
-        "|  1. In your game open INPUT/CONTROLLER settings and     |\n"
-        "|     select the virtual Xbox 360 controller.             |\n"
-        "|  2. Hold BOTH FISTS up like gripping a steering wheel.  |\n"
-        "|  3. TILT the wheel left/right to steer (analog axis).   |\n"
-        "|  4. RAISE EYEBROWS to brake (left trigger).             |\n"
-        "|  5. Open LEFT PALM to toggle W held / released.         |\n"
-        "|  6. Press [Q] in the camera window to quit cleanly.     |\n"
-        "+----------------------------------------------------------+\n"
-    )
+    if args.probe_cameras:
+        probe_cameras()
+
+    log("""
++----------------------------------------------------------+
+|         FIST STEERING WHEEL CONTROLLER                  |
++----------------------------------------------------------+
+|  1. In your game open INPUT/CONTROLLER settings and     |
+|     select the virtual Xbox 360 controller.             |
+|  2. Hold BOTH FISTS up like gripping a steering wheel.  |
+|  3. TILT the wheel left/right to steer (analog axis).   |
+|  4. RAISE EYEBROWS to brake (left trigger).             |
+|  5. Open LEFT PALM to toggle W held / released.         |
+|  6. Press [Q] in the camera window to quit cleanly.     |
++----------------------------------------------------------+
+""")
+    
+    global gamepad
+    log("\n[INIT] Creating virtual Xbox 360 controller via vgamepad…", verbose_only=True)
+    try:
+        import vgamepad as vg
+        gamepad = vg.VX360Gamepad()
+    except Exception as exc:
+        log(f"\n[ERROR] Could not create virtual gamepad: {exc}")
+        sys.exit(1)
 
     cap = cv2.VideoCapture(CAMERA_INDEX)
     if not cap.isOpened():
-        print(f"[ERROR] Cannot open camera {CAMERA_INDEX}. Change CAMERA_INDEX and retry.")
+        log(f"[ERROR] Cannot open camera {CAMERA_INDEX}. Change CAMERA_INDEX and retry.")
         sys.exit(1)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
@@ -408,30 +444,37 @@ def main() -> None:
         min_detection_confidence=0.6,
         min_tracking_confidence=0.5,
     )
-    face_mesh = mp_face_mesh.FaceMesh(
-        static_image_mode=False,
-        max_num_faces=1,
-        refine_landmarks=True,
-        min_detection_confidence=0.5,
-        min_tracking_confidence=0.5,
-    )
+    
+    face_mesh = None
+    eyebrow_baseline = 0.30
+    if not DISABLE_BRAKE:
+        face_mesh = mp_face_mesh.FaceMesh(
+            static_image_mode=False,
+            max_num_faces=1,
+            refine_landmarks=True,
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5,
+        )
+        if not BENCHMARK_MODE:
+            eyebrow_baseline_res = run_calibration(cap, face_mesh)
+            if eyebrow_baseline_res is None:
+                log("[EXIT] Calibration aborted.")
+                cap.release()
+                cv2.destroyAllWindows()
+                return
+            eyebrow_baseline = eyebrow_baseline_res
+            cv2.destroyAllWindows()
 
-    eyebrow_baseline = run_calibration(cap, face_mesh)
-    if eyebrow_baseline is None:
-        print("[EXIT] Calibration aborted.")
-        cap.release()
-        cv2.destroyAllWindows()
-        return
-
-    cv2.destroyAllWindows()
-
-    smooth_steer: float = 0.0
-    prev_brake: bool = False
-    prev_left_open: bool = False    # for rising-edge detection on left-palm gesture
+    smooth_steer = 0.0
+    prev_brake = False
+    prev_left_open = False
     global _w_held
     WINDOW = "Fist Steering Wheel Controller"
 
-    print("\n[RUNNING] Tracking active. Press [Q] in the camera window to quit.\n")
+    log("\n[RUNNING] Tracking active. Press [Q] in the camera window to quit.\n")
+    
+    start_time = time.time()
+    frames = 0
 
     try:
         while True:
@@ -439,6 +482,7 @@ def main() -> None:
             if not ret:
                 continue
 
+            frames += 1
             frame = cv2.flip(frame, 1)
             h, w = frame.shape[:2]
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -485,24 +529,25 @@ def main() -> None:
             if PALM_KEYS_ENABLED and left_open and not prev_left_open:
                 if _w_held:
                     _kb.release('w');  _w_held = False
-                    print("[PALM-L] W released (toggle off)")
+                    log("[PALM-L] W released (toggle off)")
                 else:
                     _kb.press('w');    _w_held = True
-                    print("[PALM-L] W pressed  (toggle on)")
+                    log("[PALM-L] W pressed  (toggle on)")
             prev_left_open = left_open
 
             final_steer = apply_deadzone(smooth_steer, DEADZONE)
 
             # ── Face / eyebrow tracking ───────────────────────────────────────
-            face_results = face_mesh.process(rgb)
-            eyebrow_ratio: Optional[float] = None
+            eyebrow_ratio = None
             braking = False
-
-            if face_results.multi_face_landmarks:
-                lm = face_results.multi_face_landmarks[0].landmark
-                eyebrow_ratio = _eyebrow_raise_ratio(lm)
-                if eyebrow_ratio is not None:
-                    braking = (eyebrow_ratio - eyebrow_baseline) > EYEBROW_RAISE_THRESHOLD
+            
+            if not DISABLE_BRAKE and face_mesh is not None:
+                face_results = face_mesh.process(rgb)
+                if face_results.multi_face_landmarks:
+                    lm = face_results.multi_face_landmarks[0].landmark
+                    eyebrow_ratio = _eyebrow_raise_ratio(lm)
+                    if eyebrow_ratio is not None:
+                        braking = (eyebrow_ratio - eyebrow_baseline) > EYEBROW_RAISE_THRESHOLD
 
             throttle_active = AUTO_THROTTLE_ENABLED and not braking
 
@@ -513,43 +558,51 @@ def main() -> None:
             gamepad.update()
 
             if braking != prev_brake:
-                print(
+                log(
                     f"[BRAKE] {'ON' if braking else 'off'}"
                     f"  eyebrow={eyebrow_ratio:.4f}  baseline={eyebrow_baseline:.4f}"
                 )
             prev_brake = braking
 
-            # ── HUD ───────────────────────────────────────────────────────────
-            frame = draw_hud(
-                frame=frame,
-                steering=final_steer,
-                braking=braking,
-                throttle_active=throttle_active,
-                hands_detected=hands_detected,
-                eyebrow_ratio=eyebrow_ratio,
-                eyebrow_baseline=eyebrow_baseline,
-                left_pt=left_px,
-                right_pt=right_px,
-                w_held=_w_held,
-            )
-
-            cv2.imshow(WINDOW, frame)
-            if (cv2.waitKey(1) & 0xFF) == ord('q'):
-                print("\n[EXIT] Q pressed — shutting down.")
-                break
+            # ── HUD / BENCHMARK ───────────────────────────────────────────────
+            elapsed = time.time() - start_time
+            if BENCHMARK_MODE:
+                fps = frames / elapsed if elapsed > 0 else 0
+                print(f"\r[BENCHMARK] FPS: {fps:.1f} | Hands: {hands_detected} | Steer: {final_steer:+.2f} | Brake: {'ON' if braking else 'OFF'} | Time: {elapsed:.1f}s", end="")
+                if BENCHMARK_TIME > 0 and elapsed >= BENCHMARK_TIME:
+                    print("\n[BENCHMARK] Target time reached. Exiting.")
+                    break
+            else:
+                frame = draw_hud(
+                    frame=frame,
+                    steering=final_steer,
+                    braking=braking,
+                    throttle_active=throttle_active,
+                    hands_detected=hands_detected,
+                    eyebrow_ratio=eyebrow_ratio,
+                    eyebrow_baseline=eyebrow_baseline,
+                    left_pt=left_px,
+                    right_pt=right_px,
+                    w_held=_w_held,
+                )
+                cv2.imshow(WINDOW, frame)
+                if (cv2.waitKey(1) & 0xFF) == ord('q'):
+                    log("\n[EXIT] Q pressed — shutting down.")
+                    break
 
     except KeyboardInterrupt:
-        print("\n[EXIT] Interrupted.")
+        log("\n[EXIT] Interrupted.")
     except Exception:
-        print("\n[ERROR] Unexpected error:")
+        log("\n[ERROR] Unexpected error:")
         traceback.print_exc()
     finally:
         reset_gamepad()
         hands.close()
-        face_mesh.close()
+        if face_mesh is not None:
+            face_mesh.close()
         cap.release()
         cv2.destroyAllWindows()
-        print("[EXIT] Clean shutdown complete.")
+        log("[EXIT] Clean shutdown complete.")
 
 
 if __name__ == "__main__":
