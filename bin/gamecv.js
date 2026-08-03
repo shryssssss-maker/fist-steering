@@ -76,6 +76,10 @@ Examples:
   npx fist-steering config set camera 1
   npx fist-steering config set smooth 0.30
   npx fist-steering benchmark --time 30
+
+Bugs / Feedback:
+  https://github.com/shryssssss-maker/fist-steering/issues
+  Run \x1b[36mnpx fist-steering report\x1b[0m first to generate a diagnostic file to attach.
 `);
     return;
   }
@@ -180,5 +184,8 @@ Examples:
 main().catch(err => {
   console.error('\x1b[31m%s\x1b[0m', 'Unexpected error:');
   console.error(err);
+  console.error('\n\x1b[33m🐛 If this keeps happening, open an issue at:\x1b[0m');
+  console.error('   \x1b[36mhttps://github.com/shryssssss-maker/fist-steering/issues\x1b[0m');
+  console.error('   Run `npx fist-steering report` to generate a diagnostic file to attach.\n');
   process.exit(1);
 });

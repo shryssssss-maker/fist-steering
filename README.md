@@ -319,6 +319,35 @@ flowchart LR
 
 ---
 
+## 🐛 Reporting Issues
+
+Found a bug? Hit a crash? Something behaving weirdly?
+
+**Step 1 — Generate a diagnostic report from your terminal:**
+```bash
+npx fist-steering report
+```
+This creates a `fist-steering-report.md` file with your OS, Node, Python, venv status, and current config — everything needed to debug your issue.
+
+**Step 2 — Open a GitHub issue and attach the report:**
+
+> **[👉 Open an issue on GitHub](https://github.com/shryssssss-maker/fist-steering/issues)**
+
+You can also run `npx fist-steering help` to see this link directly in your terminal.
+
+---
+
+## 🆕 What's New in v1.1.0
+
+| Feature | Command |
+|:---|:---|
+| View all your settings at a glance | `npx fist-steering config show` |
+| Change one setting without the wizard | `npx fist-steering config set <key> <value>` |
+| Bug reporting link built into the CLI | `npx fist-steering help` / `npx fist-steering report` |
+| Doctor admin check is now advisory only | `npx fist-steering doctor` no longer fails if not running as admin |
+
+---
+
 ## 📋 Requirements
 
 | Requirement | Details |
